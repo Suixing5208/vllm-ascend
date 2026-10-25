@@ -16,6 +16,7 @@
 import os
 
 import numpy as np
+from vllm import SamplingParams
 
 from tests.e2e.conftest import VllmRunner, wait_until_npu_memory_free
 
@@ -54,6 +55,17 @@ COMMON = dict(
 )
 
 
+def _generate_with_prompt_tokens(pruning_rate: float) -> tuple[int, str]:
+    with VllmRunner(MODEL, video_pruning_rate=pruning_rate, **COMMON) as runner:
+        inputs = runner.get_inputs([PROMPT], videos=[_synthetic_video()])
+        outputs = runner.model.generate(
+            inputs,
+            sampling_params=SamplingParams(max_tokens=32, temperature=0.0),
+        )
+    output = outputs[0]
+    return len(output.prompt_token_ids), output.outputs[0].text
+
+
 @wait_until_npu_memory_free()
 def test_qwen35_video_without_pruning_stays_stable():
     with VllmRunner(MODEL, video_pruning_rate=0.0, **COMMON) as baseline:
@@ -76,3 +88,13 @@ def test_qwen35_video_pruning_stays_stable():
         )
 
     assert pruned_outputs and pruned_outputs[0][1]
+
+
+@wait_until_npu_memory_free()
+def test_qwen35_evs_reduces_prompt_tokens():
+    baseline_tokens, baseline_text = _generate_with_prompt_tokens(0.0)
+    pruned_tokens, pruned_text = _generate_with_prompt_tokens(0.75)
+
+    assert baseline_text
+    assert pruned_text
+    assert pruned_tokens < baseline_tokens
