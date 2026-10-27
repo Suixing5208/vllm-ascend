@@ -7,7 +7,9 @@ MoE models on Ascend NPU.
 ## Enable EVS
 
 Pass a video pruning rate greater than zero. The rate is the fraction of
-visual content retained by the upstream EVS processor.
+video tokens to prune, in the range `(0, 1)`. For example, `0.75` targets
+pruning 75% of video tokens. Text and video separator tokens are retained, so
+the reduction in total prompt tokens can be smaller.
 
 ```bash
 vllm serve /path/to/Qwen3.5-2B \
@@ -19,13 +21,14 @@ vllm serve /path/to/Qwen3.5-2B \
 
 Without `--video-pruning-rate` (or with value `0`), Qwen3.5 keeps the existing
 multimodal path. EVS requires a model whose processor supports multimodal
-pruning; unsupported models ignore the setting.
+pruning.
 
 ## Validation scope
 
 - Dense and MoE Qwen3.5 model classes share the same EVS position handling.
 - Video inputs must be supplied through the standard vLLM multimodal API.
-- The image-only and text-only paths are unchanged.
+- Text-only requests remain supported. With pruning enabled, image embeddings
+  also pass through the upstream position reconstruction path.
 - Validate output quality for the target model and video distribution before
   changing the pruning rate in production. Higher pruning rates reduce visual
   tokens and transfer cost but can remove task-specific detail.

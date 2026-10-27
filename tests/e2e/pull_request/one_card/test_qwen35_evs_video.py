@@ -21,7 +21,11 @@ from vllm import SamplingParams
 from tests.e2e.conftest import VllmRunner, wait_until_npu_memory_free
 
 MODEL = os.environ.get("QWEN35_EVS_MODEL", "/workspace/shared_assets/models/Qwen/Qwen3.5-2B")
-PROMPT = "<|video_pad|>Describe what happens in this video in one sentence."
+# Include the outer wrapper retained by recent HF video processors.
+PROMPT = (
+    "<|im_start|>user\n<|vision_start|><|video_pad|><|vision_end|>"
+    "Describe what happens in this video in one sentence.<|im_end|>\n<|im_start|>assistant\n"
+)
 
 
 def _synthetic_video() -> tuple[np.ndarray, dict[str, object]]:

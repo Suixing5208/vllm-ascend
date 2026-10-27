@@ -114,10 +114,44 @@ patch_qwen3_vl_moe_pp_layer_range()
 # before delegating to the original implementation. (No-op when already
 # co-located, e.g. on GPU.)
 # ----------------------------------------------------------------------------
+def _mask_outer_vision_markers(input_ids, vision_start_token_id, vision_end_token_id):
+    # Newer HF processors retain an outer video wrapper around the per-frame
+    # wrappers. It is text for position reconstruction, not another frame.
+    # Mask only the outer start in a copy used by the position parser; keep
+    # sequence offsets and the actual prompt token IDs unchanged.
+    if isinstance(input_ids, torch.Tensor):
+        marker_positions = torch.where((input_ids == vision_start_token_id) | (input_ids == vision_end_token_id))[0]
+        markers = input_ids[marker_positions]
+        outer_positions = marker_positions[:-1][
+            (markers[:-1] == vision_start_token_id) & (markers[1:] == vision_start_token_id)
+        ]
+        masked_ids = input_ids.clone()
+        masked_ids[outer_positions] = vision_end_token_id
+        return masked_ids
+
+    marker_positions = [
+        i for i, token in enumerate(input_ids) if token in (vision_start_token_id, vision_end_token_id)
+    ]
+    outer_positions = [
+        current
+        for current, following in zip(marker_positions, marker_positions[1:])
+        if input_ids[current] == input_ids[following] == vision_start_token_id
+    ]
+    if not outer_positions:
+        return input_ids
+    masked_ids = list(input_ids)
+    for position in outer_positions:
+        masked_ids[position] = vision_end_token_id
+    return masked_ids
+
+
 def _evs_recompute_mrope_positions_wrap(orig):
     def wrap(self, input_ids, multimodal_embeddings, mrope_positions, num_computed_tokens):
         if mrope_positions is not None and len(multimodal_embeddings):
             mrope_positions = mrope_positions.to(multimodal_embeddings[0].device)
+        config = getattr(self, "config", None)
+        if config is not None:
+            input_ids = _mask_outer_vision_markers(input_ids, config.vision_start_token_id, config.vision_end_token_id)
         return orig(self, input_ids, multimodal_embeddings, mrope_positions, num_computed_tokens)
 
     return wrap

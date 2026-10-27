@@ -81,3 +81,26 @@ def test_set_qwen3_5_evs_attrs_disables_pruning_without_multimodal_config():
     assert model.video_pruning_rate == 0.0
     assert model.visual_dim == 0
     assert model.multiscale_dim == 0
+
+
+def test_set_qwen3_5_evs_attrs_preserves_disabled_pruning():
+    model = SimpleNamespace()
+    config = _vllm_config(pruning_rate=0.0)
+
+    with patch.object(patch_qwen3_5, "cached_tokenizer_from_config", return_value=object()):
+        patch_qwen3_5._set_qwen3_5_evs_attrs(model, config)
+
+    assert model.is_multimodal_pruning_enabled is False
+    assert model.video_pruning_method is None
+    assert model.video_pruning_rate == 0.0
+
+
+def test_set_qwen3_5_evs_attrs_uses_the_pruning_spec():
+    model = SimpleNamespace()
+    config = _vllm_config(pruning_method="vidcom2")
+
+    with patch.object(patch_qwen3_5, "cached_tokenizer_from_config", return_value=object()):
+        patch_qwen3_5._set_qwen3_5_evs_attrs(model, config)
+
+    assert model.video_pruning_method == "vidcom2"
+    assert model.video_pruning_rate == 0.75

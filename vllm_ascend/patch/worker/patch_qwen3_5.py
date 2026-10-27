@@ -227,19 +227,13 @@ else:
 
 
 # ----------------------------------------------------------------------------
-# EVS (Efficient Video Sampling) multimodal pruning for Qwen3.5.
-# Qwen3.5 inherits the full EVS pipeline (pruning in _process_video_input +
-# recompute_mrope_positions) from Qwen3VLForConditionalGeneration but ships
-# with it explicitly disabled. Re-enable it on Ascend NPU by:
-#   1. supports_multimodal_pruning = True
-#   2. drop the NotImplementedError override of recompute_mrope_positions so
-#      the parent's impl is inherited
-#   3. wrap __init__ to honor multimodal_config flags (--video-pruning-rate
-#      q>0) and set the EVS post-processing attributes (_tokenizer /
-#      use_deepstack / visual_dim / ...) that Qwen3.5's __init__ omits (it
-#      calls nn.Module.__init__ instead of super().__init__).
-# The runner-side wiring (NPUModelRunner.load_model setting
-# is_multimodal_pruning_enabled) lives in worker/model_runner_v1.py.
+# Complete the inherited Qwen3-VL video-pruning initialization for Qwen3.5.
+# The verified upstream revision already initializes most EVS attributes but
+# omits video_pruning_method. Also normalize an empty deepstack configuration
+# so the video path does not enter a branch with zero deepstack levels.
+# Keep the capability/method compatibility guards for upstream variants that
+# explicitly disable pruning. Runner integration is provided by upstream V2's
+# mm_pruner and Ascend V1's load_model in worker/v1/model_runner.py.
 # ----------------------------------------------------------------------------
 from vllm.model_executor.models.qwen3_5 import (  # noqa: E402
     Qwen3_5ForConditionalGeneration,
