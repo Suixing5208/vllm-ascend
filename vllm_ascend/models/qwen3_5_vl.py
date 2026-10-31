@@ -204,6 +204,9 @@ class _AscendVLPreprocessMixin:
 
     def __init__(self, *, vllm_config, prefix="model"):
         super().__init__(vllm_config=vllm_config, prefix=prefix)
+        pruning_spec = self.multimodal_config.get_video_pruning_spec()
+        self.video_pruning_method = pruning_spec[0] if pruning_spec is not None else None
+        self.use_deepstack = self.deepstack_num_level > 0
         self.input_norm = build_mm_input_norm(self.model_config)
         # Ascend normalizes before the ViT, including encoder graph selection.
         # Upstream also installs a normalizer inside the ViT as of v0.32;
@@ -214,6 +217,17 @@ class _AscendVLPreprocessMixin:
         self._ps = vc.patch_size
         self._tps = vc.temporal_patch_size
         self._ms = vc.spatial_merge_size
+
+    def recompute_mrope_positions(
+        self, input_ids, multimodal_embeddings, mrope_positions, num_computed_tokens
+    ):
+        if mrope_positions is not None and multimodal_embeddings:
+            device = multimodal_embeddings[0].device
+            if mrope_positions.device != device:
+                mrope_positions = mrope_positions.to(device)
+        return super().recompute_mrope_positions(
+            input_ids, multimodal_embeddings, mrope_positions, num_computed_tokens
+        )
 
     @property
     def _device_do_normalize(self) -> bool:
